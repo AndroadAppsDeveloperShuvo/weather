@@ -1,0 +1,6 @@
+{
+  "name": "সঠিক আবহাওয়া (Precise Weather)",
+  "description": "Hyper-accurate, location-based weather updates for precise locations like villages and thanas.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

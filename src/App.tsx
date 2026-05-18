@@ -8,7 +8,8 @@ import {
   Clock, 
   Calendar,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Search
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from './lib/utils';
@@ -103,6 +104,9 @@ export default function App() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [insight, setInsight] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   const getInsight = useCallback(async (weatherData: WeatherData, addr: string) => {
     try {
@@ -125,10 +129,10 @@ export default function App() {
   }, []);
 
   const getFallbackAdvice = (code: number, temp: number): string => {
-    if (code >= 60) return "বৃষ্টি হতে পারে, সাথে ছাতা রাখুন।";
-    if (temp > 32) return "প্রচণ্ড গরম, প্রচুর পানি পান করুন এবং ছায়াঘেরা স্থানে থাকুন।";
-    if (temp < 15) return "হালকা শীত অনুভূত হতে পারে, সাথে হালকা গরম কাপড় রাখুন।";
-    return "আজকের আবহাওয়া চমৎকার! আপনার দিনটি শুভ হোক।";
+    if (temp > 33) return "অতিরিক্ত গরম! শেডে পর্যাপ্ত বাতাস চলাচলের ব্যবস্থা করুন এবং পানির সাথে ইলেকট্রোলাইট দিন।";
+    if (temp < 18) return "শীতল আবহাওয়া, শেডে পর্দার ব্যবস্থা রাখুন এবং ব্রুডিং তাপমাত্রা পর্যবেক্ষণ করুন।";
+    if (code >= 60) return "বৃষ্টির সম্ভাবনা, শেডের ভেতর আর্দ্রতা বাড়তে পারে। পর্দা ও লিটার শুকনা রাখুন।";
+    return "আবহাওয়া স্বাভাবিক। মুরগির শেডে পর্যাপ্ত আলো ও বিশুদ্ধ পানি নিশ্চিত করুন।";
   };
 
   const handleLocationFound = useCallback(async (lat: number, lng: number, address: string) => {
@@ -139,16 +143,46 @@ export default function App() {
     });
     
     setLoading(true);
+    setError(null);
     try {
       const data = await fetchWeather(lat, lng);
       setWeather(data);
       getInsight(data, address);
     } catch (e) {
       console.error(e);
+      setError('আবহাওয়ার তথ্য পাওয়া যায়নি।');
     } finally {
       setLoading(false);
     }
   }, [getInsight]);
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&addressdetails=1`, {
+        headers: { 'Accept-Language': 'bn', 'User-Agent': 'WeatherApp/1.0' }
+      });
+      const data = await response.json();
+      if (data && data[0]) {
+        const item = data[0];
+        const addr = item.address;
+        const locationName = addr.village || addr.suburb || addr.town || addr.city_district || addr.road || addr.county || addr.state || item.display_name;
+        const district = addr.state_district || addr.city || '';
+        const fullLabel = `${locationName}${district ? ', ' + district : ''}`;
+        handleLocationFound(parseFloat(item.lat), parseFloat(item.lon), fullLabel);
+      } else {
+        alert('দুঃখিত, ওই জায়গাটি খুঁজে পাওয়া যায়নি।');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('লোকেশন খুঁজতে সমস্যা হচ্ছে।');
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   return (
     <div className={cn(
@@ -167,38 +201,70 @@ export default function App() {
 
       <div className="max-w-4xl w-full relative z-10 flex flex-col gap-6">
         <header className="flex flex-col items-center md:items-start md:flex-row md:justify-between gap-4">
-          <div className="text-center md:text-left">
+          <div className="text-center md:text-left flex-1 w-full">
             <div className="flex items-center justify-center md:justify-start gap-2 text-white/70 mb-1">
               <MapPin className="w-4 h-4" />
-              <span className="text-sm font-medium tracking-wide uppercase">আপনার বর্তমান অবস্থান</span>
+              <span className="text-sm font-medium tracking-wide uppercase">আপনার অবস্থান</span>
             </div>
-            <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
-              {location ? location.address : "লোকেশনের নাম খোঁজা হচ্ছে..."}
+            <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight break-words">
+              {location ? location.address : "অপেক্ষা করুন..."}
             </h1>
           </div>
           
-          <div className="flex items-center bg-white/10 backdrop-blur-md rounded-full px-4 py-2 border border-white/20">
-            <Clock className="w-4 h-4 text-white/70 mr-2" />
-            <span className="text-white font-medium">{format(new Date(), 'hh:mm a')}</span>
+          <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
+            <div className="flex items-center bg-white/10 backdrop-blur-md rounded-full px-4 py-2 border border-white/20 whitespace-nowrap">
+              <Clock className="w-4 h-4 text-white/70 mr-2" />
+              <span className="text-white font-medium">{format(new Date(), 'hh:mm a')}</span>
+            </div>
+            
+            <form onSubmit={handleSearch} className="relative w-full md:w-64">
+              <input 
+                type="text" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="অন্য জায়গা সার্চ করুন..."
+                className="bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-4 py-2.5 pl-10 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/40 w-full transition-all text-sm"
+              />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
+              {isSearching && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-white/50 animate-spin" />}
+            </form>
           </div>
         </header>
 
         <LocationFetcher onLocationFound={handleLocationFound} />
 
-        {loading && (
-          <div className="flex flex-col items-center justify-center p-20 text-white/50 animate-pulse">
+        {error && (
+           <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-[32px] p-6 text-center">
+              <p className="text-red-200 font-medium">{error}</p>
+           </div>
+        )}
+
+        {loading && !weather && (
+          <div className="flex flex-col items-center justify-center p-20 text-white/50 bg-white/5 backdrop-blur-md rounded-[40px] border border-white/10">
             <RefreshCw className="w-12 h-12 mb-4 animate-spin" />
-            <p className="text-lg font-medium">আবহাওয়ার তথ্য সংগ্রহ করা হচ্ছে...</p>
+            <p className="text-lg font-medium">তথ্য সংগ্রহ করা হচ্ছে...</p>
           </div>
         )}
 
         <AnimatePresence mode="wait">
-          {weather && !loading && (
+          {!weather && !loading && (
             <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="p-16 text-center text-white/40 bg-white/5 backdrop-blur-md rounded-[40px] border border-white/10"
+            >
+              <MapPin className="w-16 h-16 opacity-10 mx-auto mb-4" />
+              <p className="text-xl">উপরে লোকেশন পারমিশন দিন অথবা <br/> জায়গার নাম লিখে সার্চ করুন</p>
+            </motion.div>
+          )}
+
+          {weather && (
+            <motion.div 
+              key={location?.address}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+              className={cn("grid grid-cols-1 lg:grid-cols-3 gap-6", loading && "opacity-50 blur-[2px] pointer-events-none transition-all")}
             >
               <div className="lg:col-span-2 bg-white/20 backdrop-blur-2xl rounded-[40px] border border-white/20 p-8 md:p-12 text-white overflow-hidden relative group">
                 <div className="flex flex-col md:flex-row items-center gap-10">
@@ -233,10 +299,13 @@ export default function App() {
                     animate={{ opacity: 1, x: 0 }}
                     className="mt-12 bg-white/10 p-6 rounded-3xl border border-white/10 flex items-center gap-4"
                   >
-                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center shrink-0">
-                       <span className="text-white font-bold text-xs">AI</span>
+                    <div className="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center shrink-0 shadow-lg shadow-yellow-500/20">
+                       <span className="text-white font-bold text-[10px]">FARM</span>
                     </div>
-                    <p className="text-lg text-white leading-tight italic">"{insight}"</p>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] uppercase font-bold text-white/50 tracking-widest mb-1">প্রো-পরামর্শ (Poultry Advice)</span>
+                      <p className="text-lg text-white leading-tight italic">"{insight}"</p>
+                    </div>
                   </motion.div>
                 )}
               </div>

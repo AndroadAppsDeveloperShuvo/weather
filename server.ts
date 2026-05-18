@@ -16,7 +16,11 @@ async function startServer() {
   app.post("/api/insights", async (req, res) => {
     try {
       const { weather, location } = req.body;
-      const prompt = `Based on this weather data for ${location}: Current Temp: ${weather.current.temp}°C, Condition: ${weather.current.weatherCode}. Provide a very short, helpful 1-sentence weather advice in Bengali (বাংলা). Focus on health or activity advice. Keep it under 15 words.`;
+      const prompt = `You are an expert Poultry Farming Advisor in Bangladesh. 
+      Current Weather in ${location}: Temp ${weather.current.temp}°C, Humidity ${weather.current.humidity}%, Condition code ${weather.current.weatherCode}.
+      Based on this, provide 1 short, very specific piece of advice for poultry farmers (Broiler, Layer, or Sonali birds). 
+      Focus on ventilation, water temperature, electrolyte needs, or brooding adjustment.
+      Language: Bengali (বাংলা). Max 20 words.`;
       
       const result = await model.generateContent(prompt);
       const text = result.response.text();
